@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Comprehensive LEO Tracker</title>
+
+    <!-- Three.js Library for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Satellite.js Library for TLE (Two-Line Element) propagation to calculate satellite positions -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/4.1.4/satellite.min.js"></script>
+
+    <style>
+        /* Basic reset and full-page layout */
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            height: 100%; /* Full height */
+            font-family: 'Arial', sans-serif;
+            background: #000; /* Dark background for space theme */
+        }
+        
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Styles for the control panel */
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100; /* Ensure controls are above the 3D scene */
+            background: rgba(0, 0, 0, 0.8); /* Semi-transparent black background */
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            min-width: 250px;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.3); /* Greenish glow */
+        }
+        
+        #controls h3 {
+            margin: 0 0 15px 0;
+            color: #00ff88; /* Accent color */
+            text-shadow: 0 0 5px #00ff88;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #ccc;
+        }
+        
+        /* Button styles */
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Gradient background */
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px 5px 5px 0;
+            font-size: 12px;
+            transition: all 0.3s ease; /* Smooth transitions for hover effects */
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+        }
+        
+        button:hover {
+            transform: translateY(-2px); /* Slight lift effect */
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); /* Enhanced shadow on hover */
+        }
+        
+        button.active {
+            background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%); /* Active button accent color */
+            box-shadow: 0 0 10px #00ff88;
+        }
+        
+        /* Styles for the live statistics panel */
+        #stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            font-size: 12px;
+            min-width: 200px;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+        }
+        
+        #stats h4 {
+            margin: 0 0 10px 0;
+            color: #00ff88;
+            text-shadow: 0 0 5px #00ff88;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        /* Styles for the legend */
+        #legend {
+            position: absolute;
+            bottom: 320px; /* Position above satellite details */
+            right: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            font-size: 12px;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+        }
+
+        #legend h4 {
+            margin: 0 0 10px 0;
+            color: #00ff88;
+            text-shadow: 0 0 5px #00ff88;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        /* Set colors for legend dots */
+        .legend-dot.starlink { background: #00ff88; } /* Green */
+        .legend-dot.other-leo { background: #6699ff; } /* Blue */
+        .legend-dot.debris { background: #ffaa00; } /* Orange */
+        .legend-dot.inactive { background: #ff4444; } /* Red */
+
+
+    /* Styles for the satellite list panel */
+    #satelliteList {
+        position: absolute;
+        left: 20px;
+        bottom: 50px;
+        width: 280px;
+        max-height: 400px; /* Limit height for scrollability */
+        background: rgba(0, 0, 0, 0.9);
+        border-radius: 10px;
+        color: white;
+        font-size: 11px;
+        z-index: 100;
+        overflow-y: auto; /* Enable scrolling for long lists */
+        display: none; /* Hidden by default, toggled by button */
+        box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+    }
+
+    #satelliteList h4 {
+        margin: 0;
+        padding: 15px;
+        color: #00ff88;
+        border-bottom: 1px solid #333;
+        text-shadow: 0 0 5px #00ff88;
+        position: sticky; /* Keep header visible when scrolling */
+        top: 0;
+        background: rgba(0, 0, 0, 0.9);
+        z-index: 101;
+    }
+
+    .satellite-item {
+        padding: 8px 15px;
+        border-bottom: 1px solid #222;
+        cursor: pointer;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+    }
+
+    .satellite-item:last-child {
+        border-bottom: none; /* No border for the last item */
+    }
+
+    .satellite-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .satellite-item.selected {
+        background: rgba(0, 255, 136, 0.2); /* Highlight selected item */
+        border-left: 3px solid #00ff88;
+        padding-left: 12px;
+    }
+
+    .satellite-status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 8px;
+        flex-shrink: 0;
+    }
+    /* Set colors for satellite status dots */
+    .satellite-status-dot.starlink { background: #00ff88; }
+    .satellite-status-dot.other-leo { background: #6699ff; }
+    .satellite-status-dot.debris { background: #ffaa00; }
+    .satellite-status-dot.inactive { background: #ff4444; }
+
+
+    /* Styles for the satellite details panel */
+    #satelliteDetails {
+        position: absolute;
+        right: 20px;
+        bottom: 20px;
+        width: 250px;
+        background: rgba(0, 0, 0, 0.9);
+        border-radius: 10px;
+        color: white;
+        font-size: 12px;
+        z-index: 100;
+        display: none; /* Hidden by default, shown on selection */
+        padding: 15px;
+        box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+    }
+
+    #satelliteDetails h4 {
+        margin: 0 0 10px 0;
+        color: #00ff88;
+        text-shadow: 0 0 5px #00ff88;
+    }
+
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        padding: 4px 0;
+        border-bottom: 1px solid #333;
+    }
+
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+
+    .detail-value {
+        color: #00ff88;
+        font-weight: bold;
+    }
+    
+    /* Styles for the loading overlay */
+    #loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 18px;
+        z-index: 1000; /* Ensure it's on top */
+        text-align: center;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 0 25px rgba(0, 255, 136, 0.5);
+    }
+    
+    .spinner {
+        border: 3px solid #333;
+        border-top: 3px solid #00ff88; /* Green accent for spinner */
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite; /* Spinning animation */
+        margin: 0 auto 10px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* Styles for the slider and its label */
+    input[type="range"] {
+        width: 100%;
+        margin-top: 10px;
+        -webkit-appearance: none; /* Remove default styling */
+        height: 8px;
+        background: #444; /* Darker track for better visibility */
+        border-radius: 5px;
+        outline: none;
+        opacity: 0.8;
+        transition: opacity .2s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #00ff88;
+        cursor: pointer;
+        box-shadow: 0 0 5px #00ff88;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #00ff88;
+        cursor: pointer;
+        box-shadow: 0 0 5px #00ff88;
+    }
+
+    #yearDisplay, #percentageDisplay {
+        margin-top: 5px;
+        font-size: 14px;
+        color: #00ff88;
+        text-align: center;
+        font-weight: bold;
+    }
+</style>
+</head>
+<body>
+    <div id="container">
+        <div id="loading">
+            <div class="spinner"></div>
+            Loading Earth and Satellite data...
+        </div>
+        
+        <div id="controls">
+            <h3>🛰️ LEO Tracker</h3>
+            
+            <div class="control-group">
+                <button id="toggleStarlink" class="active">Show Starlink</button>
+                <button id="toggleOtherLeo">Show Other LEO</button> 
+                <button id="toggleDebris">Show Debris</button><br>
+                <button id="toggleInactive">Show Inactive</button>
+            </div>
+            
+            <div class="control-group">
+                <button id="toggleOrbits">Show Orbits</button>
+                <button id="toggleTrails">Show Trails</button>
+                <button id="toggleLabels">Show List</button>
+            </div>
+            
+            <div class="control-group">
+                <label>Satellite Size:</label>
+                <button onclick="setSatelliteSize(0.5, this)">Small</button>
+                <button onclick="setSatelliteSize(1, this)" class="active">Medium</button>
+                <button onclick="setSatelliteSize(2, this)">Large</button>
+            </div>
+            
+            <div class="control-group">
+                <button onclick="focusOnConstellation()">Focus Constellation</button>
+                <button onclick="resetView()">Reset View</button>
+            </div>
+
+            <div class="control-group">
+                <label for="timelineSlider">Deployment Timeline:</label>
+                <input type="range" id="timelineSlider" min="2019" max="2025" value="2025">
+                <div id="yearDisplay">2025</div>
+            </div>
+
+            <!-- New Percentage Slider -->
+            <div class="control-group">
+                <label for="percentageSlider">Coverage Percentage:</label>
+                <input type="range" id="percentageSlider" min="1" max="100" value="25">
+                <div id="percentageDisplay">25%</div>
+            </div>
+        </div>
+        
+        <div id="stats">
+            <h4>Live Stats</h4>
+            <div class="stat-item">
+                <span>Total Displayed:</span>
+                <span class="stat-value" id="totalDisplayedSats">0</span>
+            </div>
+            <div class="stat-item">
+                <span>Starlink Displayed:</span>
+                <span class="stat-value" id="starlinkDisplayedSats">0</span>
+            </div>
+            <div class="stat-item">
+                <span>Other LEO Displayed:</span>
+                <span class="stat-value" id="otherLeoDisplayedSats">0</span>
+            </div>
+            <div class="stat-item">
+                <span>Debris Displayed:</span>
+                <span class="stat-value" id="debrisDisplayedSats">0</span>
+            </div>
+            <div class="stat-item">
+                <span>Inactive Displayed:</span>
+                <span class="stat-value" id="inactiveDisplayedSats">0</span>
+            </div>
+            <div class="stat-item">
+                <span>Avg Altitude:</span>
+                <span class="stat-value" id="avgAlt">0 km</span>
+            </div>
+            <div class="stat-item">
+                <span>Coverage (Sim.):</span>
+                <span class="stat-value" id="coverage">0%</span>
+            </div>
+            <div class="stat-item">
+                <span>Update Rate:</span>
+                <span class="stat-value">Real-time</span>
+            </div>
+        </div>
+
+        <div id="satelliteList">
+            <h4>🛰️ Satellite List</h4>
+            <div id="satelliteListContent"></div>
+        </div>
+
+        <div id="satelliteDetails">
+            <h4>📡 Satellite Details</h4>
+            <div id="satelliteDetailsContent">
+                <p>Click on a satellite to view details</p>
+            </div>
+        </div>
+
+        <div id="legend">
+            <h4>Legend</h4>
+            <div class="legend-item">
+                <div class="legend-dot starlink"></div>
+                <span>Starlink</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot other-leo"></div>
+                <span>Other LEO (OneWeb, Iridium)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot debris"></div>
+                <span>Debris</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot inactive"></div>
+                <span>Inactive (Simulated)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Message Box for non-alert notifications -->
+    <div id="messageBox">
+        <p id="messageBoxText"></p>
+        <button onclick="hideMessageBox()">OK</button>
+    </div>
+
+    <script>
+        let scene, camera, renderer, earth, earthGroup;
+        let allSatellites3D = []; // Stores ALL Three.js satellite objects for currently rendered view
+        let orbitPaths = []; // Stores Three.js orbit line objects
+        let satelliteTrails = []; // Stores Three.js trail objects
+        let raycaster, mouse;
+        let selectedSatellite = null; // References the 3D object of the selected satellite
+        
+        // Visibility Toggles
+        let starlinkVisible = true;
+        let otherLeoVisible = false;
+        let debrisVisible = false;
+        let inactiveVisible = false;
+        let orbitsVisible = false;
+        let trailsVisible = false;
+        let labelsVisible = false; 
+
+        let satelliteSize = 1; // Default medium size for satellites
+        let isAnimating = false; // Flag to control animation loop start/stop
+
+        // Constants for visualization scaling and detail
+        const EARTH_RADIUS = 100; // Radius of Earth in Three.js units
+        const SCALE_FACTOR = 0.1; // Scales real-world altitude (km) to Three.js units
+        const TRAIL_LENGTH = 50; // Number of points in the satellite trail
+        
+        // Colors for different satellite types
+        const STARLINK_COLOR = 0x00ff88; // Green
+        const OTHER_LEO_COLOR = 0x6699ff; // Blue
+        const DEBRIS_COLOR = 0xffaa00;   // Orange
+        const INACTIVE_COLOR = 0xff4444; // Red
+
+        // Define the horizontal offset for the globe 
+        const GLOBE_OFFSET_X = 80;
+
+        // Arrays to store ALL fetched and parsed satellite data, categorized by type
+        let allStarlinkData = []; 
+        let allOtherLeoData = []; // Combined OneWeb and Iridium
+        let allDebrisData = [];   // Combined Fengyun and Cosmos debris
+        let allInactiveData = []; // Simulated Inactive satellites (generated)
+
+        // Array to store currently displayed satellites (filtered by timeline AND percentage AND visibility)
+        let displayedSatellitesData = []; // Stores the DATA objects, not the 3D objects
+
+        // Variable for controlling the display percentage of real satellites
+        // Default to 0.25 (25%) for a less CPU-intensive initial load
+        let currentDisplayPercentage = 0.25; 
+
+        /**
+         * Displays a custom message box to the user (replaces alert()).
+         * @param {string} message - The message to display.
+         */
+        function showMessageBox(message) {
+            const messageBox = document.getElementById('messageBox');
+            const messageBoxText = document.getElementById('messageBoxText');
+            messageBoxText.textContent = message;
+            messageBox.style.display = 'block';
+        }
+
+        /**
+         * Hides the custom message box.
+         */
+        function hideMessageBox() {
+            document.getElementById('messageBox').style.display = 'none';
+        }
+
+        /**
+         * Fetches TLE data for a specific group from Celestrak.
+         * @param {string} groupName - The name of the TLE group (e.g., 'starlink').
+         * @returns {Promise<string|null>} The TLE data as a string, or null if fetching fails.
+         */
+        async function fetchTLEGroup(groupName) {
+            try {
+                const response = await fetch(`https://celestrak.org/NORAD/elements/gp.php?GROUP=${groupName}&FORMAT=tle`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status} for group ${groupName}`);
+                }
+                const tleText = await response.text();
+                return tleText;
+            } catch (error) {
+                console.error(`Failed to fetch TLEs for ${groupName}:`, error);
+                return null;
+            }
+        }
+
+        /**
+         * Parses raw TLE text into a structured array of satellite objects,
+         * including extracting the launch year and assigning a type.
+         * @param {string} tleText - The TLE data as a string (multi-line).
+         * @param {string} type - The type of satellite ('starlink', 'other-leo', 'debris').
+         * @returns {Array<Object>} An array of objects, each representing a satellite.
+         */
+        function parseTLEs(tleText, type) {
+            const lines = tleText.trim().split('\n');
+            const satellites = [];
+            for (let i = 0; i < lines.length; i += 3) {
+                if (i + 2 >= lines.length) continue; // Ensure complete TLE block
+                const name = lines[i].trim();
+                const tle1 = lines[i + 1];
+                const tle2 = lines[i + 2];
+
+                let launchYear = null;
+                // Attempt to extract launch year for real TLEs
+                if (tle1 && tle1.length >= 11) {
+                    const launchYearStr = tle1.substring(9, 11);
+                    if (!isNaN(launchYearStr)) { // Check if it's a valid number
+                        let twoDigitYear = parseInt(launchYearStr, 10);
+                        launchYear = (twoDigitYear < 57) ? (2000 + twoDigitYear) : (1900 + twoDigitYear);
+                    }
+                }
+                // Assign a unique id for each satellite
+                let idPrefix = '';
+                if (type === 'starlink') idPrefix = 'STARLINK-';
+                else if (type === 'other-leo') idPrefix = 'OTHERLEO-';
+                else if (type === 'debris') idPrefix = 'DEBRIS-';
+                const satrec = satellite.twoline2satrec(tle1, tle2);
+                // Extract inclination from TLE line 2 (columns 8-16)
+                let inclination = 0;
+                if (tle2 && tle2.length >= 16) {
+                    inclination = parseFloat(tle2.substring(8, 16));
+                }
+                // Get initial position
+                let latitude = 0, longitude = 0, altitude = 0;
+                if (satrec) {
+                    const pos = getSatPosition(satrec, new Date());
+                    if (pos) {
+                        latitude = pos.latitude;
+                        longitude = pos.longitude;
+                        altitude = pos.altitude;
+                    }
+                }
+                satellites.push({ 
+                    id: idPrefix + i, // Unique id for each satellite
+                    name, 
+                    tle1, 
+                    tle2, 
+                    launchYear, 
+                    type, 
+                    satrec: satrec, // Store satrec for propagation
+                    status: 'active', // Default status, can be refined for actual inactive later
+                    inclination: inclination,
+                    velocity: 7.5, // Approximate LEO velocity in km/s
+                    latitude: latitude,
+                    longitude: longitude,
+                    altitude: altitude
+                });
+            }
+            return satellites;
+        }
+
+        /**
+         * Loads and processes TLE data for all satellite categories.
+         * Stores data in respective `all...Data` arrays.
+         */
+        async function loadAllSatelliteData() {
+            document.getElementById('loading').style.display = 'block'; 
+
+            // Prepare all fetch promises
+            const fetchPromises = [
+                fetchTLEGroup('starlink'),
+                fetchTLEGroup('oneweb'),
+                fetchTLEGroup('iridium'),
+                fetchTLEGroup('cosmos-1408-debris'),
+                fetchTLEGroup('fengyun-1c-debris'),
+                fetchTLEGroup('iridium-33-debris'),
+                fetchTLEGroup('cosmos-2251-debris')
+            ];
+
+            // Await all fetches in parallel
+            const [
+                starlinkTleText,
+                onewebTleText,
+                iridiumTleText,
+                cosmos1408DebrisTleText,
+                fy1cDebrisTleText,
+                iridium33DebrisTleText,
+                c2251DebrisTleText
+            ] = await Promise.all(fetchPromises);
+
+            // Parse and assign data
+            if (starlinkTleText) {
+                allStarlinkData = parseTLEs(starlinkTleText, 'starlink');
+            }
+            if (onewebTleText) {
+                allOtherLeoData.push(...parseTLEs(onewebTleText, 'other-leo'));
+            }
+            if (iridiumTleText) {
+                allOtherLeoData.push(...parseTLEs(iridiumTleText, 'other-leo'));
+            }
+            if (cosmos1408DebrisTleText) {
+                allDebrisData.push(...parseTLEs(cosmos1408DebrisTleText, 'debris'));
+            }
+            if (fy1cDebrisTleText) {
+                allDebrisData.push(...parseTLEs(fy1cDebrisTleText, 'debris'));
+            }
+            if (iridium33DebrisTleText) {
+                allDebrisData.push(...parseTLEs(iridium33DebrisTleText, 'debris'));
+            }
+            if (c2251DebrisTleText) {
+                allDebrisData.push(...parseTLEs(c2251DebrisTleText, 'debris'));
+            }
+            
+            // Generate Simulated Inactive Satellites
+            generateSimulatedInactiveSatellites(200); // Generate 200 simulated inactive
+            
+            initSceneElements(); // Initialize scene after data is loaded
+            
+            document.getElementById('loading').style.display = 'none'; 
+            isAnimating = true; 
+            animate(); 
+        }
+
+        /**
+         * Generates a fixed number of simulated "Inactive" satellites.
+         * @param {number} count - The number of inactive satellites to simulate.
+         */
+        function generateSimulatedInactiveSatellites(count) {
+            allInactiveData = [];
+            const inactiveMinAlt = 200; // Lower altitude for inactive
+            const inactiveMaxAlt = 600; // Still in LEO but potentially decaying
+
+            for (let i = 0; i < count; i++) {
+                const lat = (Math.random() * 180) - 90;
+                const lon = (Math.random() * 360) - 180;
+                const alt = Math.random() * (inactiveMaxAlt - inactiveMinAlt) + inactiveMinAlt;
+
+                allInactiveData.push({
+                    id: `INACTIVE-${i}`,
+                    name: `Inactive Sat ${i + 1}`,
+                    latitude: lat,
+                    longitude: lon,
+                    altitude: alt,
+                    velocity: 7.0, // Fixed velocity for simulation
+                    status: 'inactive',
+                    inclination: Math.random() * 90,
+                    type: 'inactive',
+                    tle1: null, // No TLE for simulated
+                    tle2: null,
+                    satrec: null // No satrec for simulated
+                });
+            }
+        }
+
+        /**
+         * Calculates the geodetic position (latitude, longitude, altitude) of a satellite
+         * for a given date using the satellite.js library (SGP4 propagation).
+         * @param {object} satrec - Satellite record object from satellite.js.
+         * @param {Date} date - The specific date and time for position calculation.
+         * @returns {object|null} An object with latitude (degrees), longitude (degrees),
+         * and altitude (km), or null if propagation fails.
+         */
+        function getSatPosition(satrec, date) {
+            if (!satrec) return null; // Handle simulated satellites with no satrec
+            const positionAndVelocity = satellite.propagate(satrec, date);
+            const positionEci = positionAndVelocity.position;
+            
+            if (!positionEci) {
+                return null; 
+            }
+
+            const gmst = satellite.gstime(date); 
+            const positionGd = satellite.eciToGeodetic(positionEci, gmst); 
+            
+            return {
+                latitude: satellite.degreesLat(positionGd.latitude), 
+                longitude: satellite.degreesLong(positionGd.longitude), 
+                altitude: positionGd.height 
+            };
+        }
+
+        /**
+         * Initializes the Three.js scene, camera, renderer, and adds a starry background.
+         */
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000008); 
+            
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 5000);
+            camera.position.set(0, 0, 300); 
+            camera.lookAt(0, 0, 0); 
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true }); 
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true; 
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+            document.getElementById('container').appendChild(renderer.domElement);
+            
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2(); 
+            
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.3); 
+            scene.add(ambientLight);
+            
+            const sunLight = new THREE.DirectionalLight(0xffffff, 1); 
+            sunLight.position.set(500, 200, 500); 
+            sunLight.castShadow = true; 
+            sunLight.shadow.mapSize.width = 2048; 
+            sunLight.shadow.mapSize.height = 2048;
+            scene.add(sunLight);
+            
+            createStarField();
+            setupControls();
+
+            loadAllSatelliteData(); // Load all data initially
+        }
+
+        /**
+         * Creates a background star field using Three.js Points.
+         */
+        function createStarField() {
+            const starsGeometry = new THREE.BufferGeometry();
+            const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1 }); 
+            
+            const starsVertices = [];
+            for (let i = 0; i < 1000; i++) {
+                const radius = 2000; 
+                const x = (Math.random() - 0.5) * radius * 2;
+                const y = (Math.random() - 0.5) * radius * 2;
+                const z = (Math.random() - 0.5) * radius * 2;
+                starsVertices.push(x, y, z);
+            }
+            
+            starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+            const stars = new THREE.Points(starsGeometry, starsMaterial);
+            scene.add(stars);
+        }
+
+        /**
+         * Initializes 3D objects related to Earth and sets up sliders.
+         */
+        function initSceneElements() {
+            createEarth();
+            
+            if (earthGroup) {
+                earthGroup.position.x = GLOBE_OFFSET_X; 
+            }
+
+            setupTimelineSlider(); 
+            setupPercentageSlider(); 
+            // Initial display update based on default slider values and toggles
+            updateDisplayFromControls(); 
+        }
+        
+        /**
+         * Creates the Earth 3D model with a texture map and an atmospheric glow.
+         */
+        function createEarth() {
+            earthGroup = new THREE.Group(); 
+            const earthGeometry = new THREE.SphereGeometry(EARTH_RADIUS, 64, 64); 
+            const earthTextureUrl = 'earth.jpg'; 
+            
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load(earthTextureUrl, function(earthTexture) {
+                const earthMaterial = new THREE.MeshPhongMaterial({
+                    map: earthTexture, 
+                    shininess: 30, 
+                    specular: 0x222222 
+                });
+
+                earth = new THREE.Mesh(earthGeometry, earthMaterial);
+                earth.receiveShadow = true; 
+                earthGroup.add(earth); 
+
+                const atmosphereGeometry = new THREE.SphereGeometry(EARTH_RADIUS * 1.05, 32, 32); 
+                const atmosphereMaterial = new THREE.ShaderMaterial({
+                    vertexShader: `
+                        varying vec3 vNormal;
+                        void main() {
+                            vNormal = normalize(normalMatrix * normal);
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        varying vec3 vNormal;
+                        void main() {
+                            float intensity = pow(0.7 - dot(vNormal, vec3(0, 0, 1.0)), 2.0);
+                            gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * intensity; 
+                        }
+                    `,
+                    blending: THREE.AdditiveBlending, 
+                    side: THREE.BackSide, 
+                    transparent: true 
+                });
+                const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+                earthGroup.add(atmosphere); 
+
+                scene.add(earthGroup); 
+            }, undefined, function(err) {
+                console.error("Failed to load Earth texture:", err);
+                showMessageBox("Error loading Earth texture. Please ensure 'earth.jpg' is in the same directory.");
+            });
+        }
+
+        /**
+         * Clears all existing satellite meshes, orbits, and trails from the scene.
+         */
+        function clearExistingVizElements() {
+            allSatellites3D.forEach(obj => {
+                if (obj.group.parent) obj.group.parent.remove(obj.group);
+                obj.dot.geometry.dispose();
+                obj.dot.material.dispose();
+                obj.glow.geometry.dispose();
+                obj.glow.material.dispose();
+            });
+            allSatellites3D = [];
+
+            orbitPaths.forEach(obj => {
+                if (obj.parent) obj.parent.remove(obj);
+                if (obj.children[0]) {
+                    obj.children[0].geometry.dispose();
+                    obj.children[0].material.dispose();
+                }
+            });
+            orbitPaths = [];
+
+            satelliteTrails.forEach(obj => {
+                if (obj.group.parent) obj.group.parent.remove(obj.group);
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.line && obj.line.material) obj.line.material.dispose();
+            });
+            satelliteTrails = [];
+        }
+        
+        /**
+         * Updates the displayed satellites, orbits, and trails based on current control states.
+         */
+        function updateDisplayFromControls() {
+            clearExistingVizElements(); 
+
+            const selectedYear = parseInt(document.getElementById('timelineSlider').value);
+            const displayPercentage = parseFloat(document.getElementById('percentageSlider').value) / 100;
+
+            displayedSatellitesData = []; // Reset the data array for currently displayed satellites
+
+            if (starlinkVisible) {
+                // Filter Starlinks by year and percentage
+                const filteredStarlinks = allStarlinkData.filter(sat => 
+                    sat.launchYear <= selectedYear && Math.random() < displayPercentage
+                );
+                displayedSatellitesData.push(...filteredStarlinks);
+            }
+
+            if (otherLeoVisible) {
+                // Filter Other LEO by year and percentage
+                const filteredOtherLeo = allOtherLeoData.filter(sat => 
+                    sat.launchYear <= selectedYear && Math.random() < displayPercentage
+                );
+                displayedSatellitesData.push(...filteredOtherLeo);
+            }
+
+            if (debrisVisible) {
+                // Filter Debris by year and percentage
+                const filteredDebris = allDebrisData.filter(sat => 
+                    sat.launchYear <= selectedYear && Math.random() < displayPercentage
+                );
+                displayedSatellitesData.push(...filteredDebris);
+            }
+
+            if (inactiveVisible) {
+                // Inactive satellites are always shown 100% of their simulated count when toggled on
+                displayedSatellitesData.push(...allInactiveData);
+            }
+
+            // Create 3D objects for all displayed satellites
+            displayedSatellitesData.forEach((satData, index) => {
+                let color;
+                if (satData.type === 'starlink') color = STARLINK_COLOR;
+                else if (satData.type === 'other-leo') color = OTHER_LEO_COLOR;
+                else if (satData.type === 'debris') color = DEBRIS_COLOR;
+                else if (satData.type === 'inactive') color = INACTIVE_COLOR;
+
+                const satellite = createSatellite(satData, index, color);
+                allSatellites3D.push(satellite); // Add to combined 3D objects array
+                earthGroup.add(satellite.group); 
+                
+                if (trailsVisible) {
+                    const trail = createSatelliteTrail(satData, color);
+                    satelliteTrails.push(trail);
+                    earthGroup.add(trail.group); 
+                }
+
+                if (orbitsVisible) {
+                    const orbitGroup = createOrbitPath(satData, color);
+                    orbitPaths.push(orbitGroup);
+                    earthGroup.add(orbitGroup);
+                }
+            });
+
+            populateSatelliteList(); 
+            updateStats(); 
+        }
+        
+        /**
+         * Creates and adds a single orbit path for a given satellite.
+         * @param {object} satData - The satellite data for which to create the orbit.
+         * @param {number} color - The hexadecimal color for the orbit line.
+         * @returns {THREE.Group} The Three.js group containing the orbit line.
+         */
+        function createOrbitPath(satData, color) {
+            const orbitGroup = new THREE.Group();
+            const orbitPoints = [];
+            const segments = 128; 
+            const radius = EARTH_RADIUS + (satData.altitude * SCALE_FACTOR); 
+
+            for (let i = 0; i <= segments; i++) {
+                const angle = (i / segments) * Math.PI * 2;
+                const x = radius * Math.cos(angle);
+                const y = 0; 
+                const z = radius * Math.sin(angle);
+                orbitPoints.push(new THREE.Vector3(x, y, z));
+            }
+            const orbitGeometry = new THREE.BufferGeometry().setFromPoints(orbitPoints);
+
+            const orbitMaterial = new THREE.LineBasicMaterial({
+                color: color, 
+                transparent: true,
+                opacity: 0.4 
+            });
+            const orbitLine = new THREE.Line(orbitGeometry, orbitMaterial);
+
+            orbitLine.rotation.x = satData.inclination * Math.PI / 180; 
+            orbitLine.rotation.y = Math.random() * Math.PI * 2; 
+
+            orbitGroup.add(orbitLine);
+            return orbitGroup; // Visibility controlled by orbitsVisible global toggle and updateDisplay
+        }
+        
+        /**
+         * Creates a single 3D satellite object, represented by a glowing dot.
+         * @param {object} satData - The data object for the satellite.
+         * @param {number} index - The index of the satellite in its respective data array.
+         * @param {number} color - The hexadecimal color for the satellite.
+         * @returns {object} An object containing the Three.js group for the satellite, its data, and meshes.
+         */
+        function createSatellite(satData, index, color) {
+            const group = new THREE.Group(); 
+            
+            let dotSize = 1.5; // Default size for the core dot
+            let glowSize = 2.5; // Default size for the glow
+            let dotOpacity = 0.9;
+            let glowOpacity = 0.15;
+
+            // Adjust size and opacity based on satellite type for visual distinction
+            if (satData.type === 'starlink') {
+                dotSize = 0.7; // Smaller dot for Starlink
+                glowSize = 1.2;
+            } else if (satData.type === 'debris') {
+                dotSize = 0.4; // Smallest dot for debris
+                glowSize = 0.8;
+                dotOpacity = 0.6; // More transparent debris
+                glowOpacity = 0.1;
+            } else if (satData.type === 'inactive') {
+                dotSize = 0.8;
+                glowSize = 1.3;
+                dotOpacity = 0.7; // Slightly more transparent inactive
+                glowOpacity = 0.12;
+            }
+
+            const dotGeometry = new THREE.SphereGeometry(dotSize, 8, 6); // Uses the calculated dotSize
+            const dotMaterial = new THREE.MeshBasicMaterial({ 
+                color: color, 
+                transparent: true,
+                opacity: dotOpacity // Uses the calculated dotOpacity
+            });
+            const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+            group.add(dot);
+            
+            const glowGeometry = new THREE.SphereGeometry(glowSize, 8, 6); // Uses the calculated glowSize
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: color, 
+                transparent: true,
+                opacity: glowOpacity, // Uses the calculated glowOpacity
+                blending: THREE.AdditiveBlending 
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            group.add(glow);
+            
+            const position = latLonToPosition(satData.latitude, satData.longitude, satData.altitude);
+            group.position.copy(position);
+            
+            group.scale.setScalar(satelliteSize);
+            // Visibility will be handled by updateDisplayFromControls based on its type and global toggles
+            group.visible = true; 
+
+            return {
+                group: group, 
+                data: satData, 
+                dot: dot, 
+                glow: glow, 
+                index: index, 
+                type: satData.type 
+            };
+        }
+        
+        /**
+         * Creates a visual trail behind a satellite as it moves.
+         * @param {object} satData - The satellite's data.
+         * @param {number} color - The hexadecimal color for the trail.
+         * @returns {object} An object containing the trail's Three.js group, points, and geometry.
+         */
+        function createSatelliteTrail(satData, color) {
+            const group = new THREE.Group();
+            const trailPoints = [];
+            
+            const currentPos = latLonToPosition(satData.latitude, satData.longitude, satData.altitude);
+            for (let i = 0; i < TRAIL_LENGTH; i++) {
+                trailPoints.push(currentPos.clone()); 
+            }
+            
+            const trailGeometry = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = []; 
+            const baseColor = new THREE.Color(color);
+
+            for (let i = 0; i < trailPoints.length; i++) {
+                const point = trailPoints[i];
+                positions.push(point.x, point.y, point.z);
+                const alpha = i / TRAIL_LENGTH; 
+                colors.push(baseColor.r, baseColor.g, baseColor.b, alpha); 
+            }
+            
+            trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            trailGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4)); 
+            
+            const trailMaterial = new THREE.LineBasicMaterial({
+                vertexColors: true, 
+                transparent: true,
+                opacity: 0.8 
+            });
+            
+            const trailLine = new THREE.Line(trailGeometry, trailMaterial);
+            group.add(trailLine);
+            return {
+                group: group, 
+                points: trailPoints, 
+                geometry: trailGeometry, 
+                line: trailLine 
+            };
+        }
+        
+        /**
+         * Populates the HTML sidebar list with satellite names.
+         */
+        function populateSatelliteList() {
+            const listContent = document.getElementById('satelliteListContent');
+            listContent.innerHTML = ''; 
+            displayedSatellitesData.forEach((satData, index) => { 
+                const item = document.createElement('div');
+                item.className = 'satellite-item';
+                item.dataset.index = index; 
+                const statusDot = document.createElement('div');
+                statusDot.className = `satellite-status-dot ${satData.type}`; // Use type for class
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = satData.name;
+                item.appendChild(statusDot);
+                item.appendChild(nameSpan);
+                item.addEventListener('click', () => selectSatellite(index)); 
+                listContent.appendChild(item);
+            });
+        }
+        
+        /**
+         * Handles satellite selection: updates UI list, shows details, and highlights in 3D.
+         * @param {number} index - The index of the selected satellite within `displayedSatellitesData`.
+         */
+        function selectSatellite(index) {
+            document.querySelectorAll('.satellite-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            const selectedItem = document.querySelector(`[data-index="${index}"]`);
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+            }
+            
+            const satData = displayedSatellitesData[index];
+            selectedSatellite = allSatellites3D.find(s => s.data.id === satData.id); // Find the actual 3D object
+
+            showSatelliteDetails(satData); 
+            
+            highlightSatellite(selectedSatellite); 
+        }
+        
+        /**
+         * Displays detailed information about a selected satellite in the UI panel.
+         * @param {object} satData - The data of the satellite to display.
+         */
+        function showSatelliteDetails(satData) {
+            const detailsContent = document.getElementById('satelliteDetailsContent');
+            // Determine color based on satellite type
+            let color = '#00ff88'; // Default green (starlink)
+            if (satData.type === 'other-leo') color = '#6699ff'; // Blue
+            else if (satData.type === 'debris') color = '#ffaa00'; // Orange
+            else if (satData.type === 'inactive') color = '#ff4444'; // Red
+
+            detailsContent.innerHTML = `
+                <div style="color: ${color}">
+                    <div class="detail-item">
+                        <span>Name:</span>
+                        <span>${satData.name}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span>Type:</span>
+                        <span>${satData.type.replace('-', ' ').toUpperCase()}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span>Status:</span>
+                        <span>${satData.status.toUpperCase()}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span>Altitude:</span>
+                        <span>${satData.altitude.toFixed(1)} km</span>
+                    </div>
+                    <div class="detail-item">
+                        <span>Inclination:</span>
+                        <span>${satData.inclination.toFixed(1)}°</span>
+                    </div>
+                    <div class="detail-item">
+                        <span>Velocity:</span>
+                        <span>${satData.velocity.toFixed(2)} km/s</span>
+                    </div>
+                    <div class="detail-item">
+                        <span>Latitude:</span>
+                        <span>${satData.latitude.toFixed(2)}°</span>
+                    </div>
+                    <div class="detail-item">
+                        <span>Longitude:</span>
+                        <span>${satData.longitude.toFixed(2)}°</span>
+                    </div>
+                    ${(satData.launchYear) ? `<div class="detail-item">
+                        <span>Launch Year:</span>
+                        <span>${satData.launchYear}</span>
+                    </div>` : ''}
+                </div>
+            `;
+            document.getElementById('satelliteDetails').style.display = 'block';
+        }
+        /**
+         * Visually highlights a specific satellite in the 3D scene and dims others.
+         * @param {object} highlightedSat - The 3D satellite object to highlight.
+         */
+        function highlightSatellite(highlightedSat) {
+            allSatellites3D.forEach((sat) => {
+                if (sat === highlightedSat) {
+                    sat.dot.material.emissive.setHex(0x444444); 
+                    sat.glow.material.opacity = 0.4; 
+                    sat.glow.material.color.setHex(STARLINK_COLOR); // Consistent highlight color
+                } else {
+                    let originalColor;
+                    if (sat.type === 'starlink') originalColor = STARLINK_COLOR;
+                    else if (sat.type === 'other-leo') originalColor = OTHER_LEO_COLOR;
+                    else if (sat.type === 'debris') originalColor = DEBRIS_COLOR;
+                    else if (sat.type === 'inactive') originalColor = INACTIVE_COLOR;
+
+                    sat.dot.material.emissive.setHex(0x000000); 
+                    sat.dot.material.color.setHex(originalColor); 
+                    sat.glow.material.opacity = 0.15;
+                    sat.glow.material.color.setHex(originalColor); 
+                }
+            });
+        }
+        
+        /**
+         * Handles mouse click events on the 3D canvas for satellite selection.
+         */
+        function onMouseClick(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            
+            const clickableObjects = allSatellites3D.filter(s => s.group.visible).map(s => s.dot); // Only check visible satellites
+            const intersects = raycaster.intersectObjects(clickableObjects);
+            
+            if (intersects.length > 0) {
+                const clickedObject = intersects[0].object;
+                const foundSat = allSatellites3D.find(s => s.dot === clickedObject);
+
+                if (foundSat) {
+                    const displayedIndex = displayedSatellitesData.findIndex(s => s.id === foundSat.data.id);
+                    if (displayedIndex !== -1) {
+                         selectSatellite(displayedIndex);
+                    }
+                }
+            } else {
+                if (selectedSatellite) {
+                    selectedSatellite = null;
+                    document.querySelectorAll('.satellite-item').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                    document.getElementById('satelliteDetails').style.display = 'none'; 
+                    allSatellites3D.forEach(sat => { 
+                        let originalColor;
+                        if (sat.type === 'starlink') originalColor = STARLINK_COLOR;
+                        else if (sat.type === 'other-leo') originalColor = OTHER_LEO_COLOR;
+                        else if (sat.type === 'debris') originalColor = DEBRIS_COLOR;
+                        else if (sat.type === 'inactive') originalColor = INACTIVE_COLOR;
+                        
+                        sat.dot.material.emissive.setHex(0x000000);
+                        sat.dot.material.color.setHex(originalColor);
+                        sat.glow.material.opacity = 0.15;
+                        sat.glow.material.color.setHex(originalColor);
+                    });
+                }
+            }
+        }
+        
+        /**
+         * Updates the positions and fading of satellite trails in the 3D scene.
+         */
+        function updateTrails() {
+            satelliteTrails.forEach((trail) => {
+                // Find the corresponding 3D satellite object for this trail
+                // Need to iterate through all satellites to find the one associated with this trail
+                const sat3D = allSatellites3D.find(s => {
+                    // Check if this trail is directly attached to this satellite's group
+                    // This is a simplified check assuming 1:1 trail to satellite and no complex hierarchy
+                    return s.group.children.includes(trail.group); 
+                });
+
+                if (!sat3D || !sat3D.group.visible || !trailsVisible) {
+                    trail.group.visible = false; // Hide trail if satellite or trails are not visible
+                    return;
+                } else {
+                    trail.group.visible = true;
+                }
+                
+                const currentPos = sat3D.group.position.clone();
+                
+                trail.points.push(currentPos);
+                if (trail.points.length > TRAIL_LENGTH) {
+                    trail.points.shift();
+                }
+                
+                const positions = [];
+                const colors = []; 
+                let baseColor;
+                if (sat3D.type === 'starlink') baseColor = new THREE.Color(STARLINK_COLOR);
+                else if (sat3D.type === 'other-leo') baseColor = new THREE.Color(OTHER_LEO_COLOR);
+                else if (sat3D.type === 'debris') baseColor = new THREE.Color(DEBRIS_COLOR);
+                else if (sat3D.type === 'inactive') baseColor = new THREE.Color(INACTIVE_COLOR);
+
+                for (let i = 0; i < trail.points.length; i++) {
+                    const point = trail.points[i];
+                    positions.push(point.x, point.y, point.z);
+                    const alpha = i / TRAIL_LENGTH; 
+                    colors.push(baseColor.r, baseColor.g, baseColor.b, alpha); 
+                }
+                
+                trail.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                trail.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4)); 
+                trail.geometry.attributes.position.needsUpdate = true; 
+                trail.geometry.attributes.color.needsUpdate = true; 
+            });
+        }
+        
+        /**
+         * Converts geographic coordinates (latitude, longitude, altitude) to a Three.js 3D Cartesian position.
+         * @param {number} lat - Latitude in degrees.
+         * @param {number} lon - Longitude in degrees.
+         * @param {number} alt - Altitude in kilometers above Earth's surface.
+         * @returns {THREE.Vector3} The 3D position vector in Three.js scene coordinates.
+         */
+        function latLonToPosition(lat, lon, alt) {
+            const phi = (90 - lat) * Math.PI / 180; 
+            const theta = (lon + 180) * Math.PI / 180; 
+            
+            const radius = EARTH_RADIUS + (alt * SCALE_FACTOR); 
+            
+            const x = -(radius * Math.sin(phi) * Math.cos(theta)); 
+            const z = radius * Math.sin(phi) * Math.sin(theta);
+            const y = radius * Math.cos(phi);
+            
+            return new THREE.Vector3(x, y, z);
+        }
+        
+        /**
+         * Sets up all UI control button click handlers and mouse/touch interactions for camera control.
+         */
+        function setupControls() {
+            // New Toggle functions for different satellite types
+            document.getElementById('toggleStarlink').onclick = (event) => {
+                starlinkVisible = !starlinkVisible;
+                updateDisplayFromControls();
+                event.target.classList.toggle('active', starlinkVisible);
+            };
+            document.getElementById('toggleOtherLeo').onclick = (event) => {
+                otherLeoVisible = !otherLeoVisible;
+                updateDisplayFromControls();
+                event.target.classList.toggle('active', otherLeoVisible);
+            };
+            document.getElementById('toggleDebris').onclick = (event) => {
+                debrisVisible = !debrisVisible;
+                updateDisplayFromControls();
+                event.target.classList.toggle('active', debrisVisible);
+            };
+            document.getElementById('toggleInactive').onclick = (event) => {
+                inactiveVisible = !inactiveVisible;
+                updateDisplayFromControls();
+                event.target.classList.toggle('active', inactiveVisible);
+            };
+
+            document.getElementById('toggleOrbits').onclick = (event) => {
+                orbitsVisible = !orbitsVisible;
+                updateDisplayFromControls(); 
+                event.target.classList.toggle('active', orbitsVisible); 
+            };
+            
+            document.getElementById('toggleLabels').onclick = (event) => {
+                labelsVisible = !labelsVisible;
+                const satelliteList = document.getElementById('satelliteList');
+                satelliteList.style.display = labelsVisible ? 'block' : 'none';
+                document.getElementById('satelliteDetails').style.display = 'none'; 
+                
+                selectedSatellite = null;
+                document.querySelectorAll('.satellite-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                allSatellites3D.forEach(sat => { 
+                    let originalColor;
+                    if (sat.type === 'starlink') originalColor = STARLINK_COLOR;
+                    else if (sat.type === 'other-leo') originalColor = OTHER_LEO_COLOR;
+                    else if (sat.type === 'debris') originalColor = DEBRIS_COLOR;
+                    else if (sat.type === 'inactive') originalColor = INACTIVE_COLOR;
+                    
+                    sat.dot.material.emissive.setHex(0x000000);
+                    sat.dot.material.color.setHex(originalColor);
+                    sat.glow.material.opacity = 0.15;
+                    sat.glow.material.color.setHex(originalColor);
+                });
+
+                event.target.classList.toggle('active', labelsVisible); 
+            };
+            
+            document.getElementById('toggleTrails').onclick = (event) => {
+                trailsVisible = !trailsVisible;
+                updateDisplayFromControls(); 
+                event.target.classList.toggle('active', trailsVisible); 
+            };
+            
+            renderer.domElement.addEventListener('click', onMouseClick);
+            
+            let mouseDown = false;
+            let mouseX = 0;
+            let mouseY = 0;
+            
+            renderer.domElement.addEventListener('mousedown', (event) => {
+                mouseDown = true;
+                mouseX = event.clientX;
+                mouseY = event.clientY;
+            });
+            
+            renderer.domElement.addEventListener('mouseup', () => {
+                mouseDown = false;
+            });
+            
+            renderer.domElement.addEventListener('mousemove', (event) => {
+                if (!mouseDown) return;
+                
+                const deltaX = event.clientX - mouseX;
+                const deltaY = event.clientY - mouseY;
+                
+                earthGroup.rotation.y += deltaX * 0.005; 
+                earthGroup.rotation.x += deltaY * 0.005; 
+                
+                mouseX = event.clientX;
+                mouseY = event.clientY;
+            });
+            
+            renderer.domElement.addEventListener('wheel', (event) => {
+                event.preventDefault(); 
+                const zoomSpeed = 0.001; 
+                camera.position.z += event.deltaY * zoomSpeed * camera.position.z; 
+                
+                camera.position.z = Math.max(150, Math.min(camera.position.z, 2000));
+                camera.lookAt(GLOBE_OFFSET_X, 0, 0); 
+            });
+
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let lastTouchX = 0;
+            let lastTouchY = 0;
+            let isTouching = false;
+
+            renderer.domElement.addEventListener('touchstart', (event) => {
+                if (event.touches.length === 1) {
+                    isTouching = true;
+                    touchStartX = event.touches[0].clientX;
+                    touchStartY = event.touches[0].clientY;
+                    lastTouchX = touchStartX;
+                    lastTouchY = touchStartY;
+                }
+            });
+
+            renderer.domElement.addEventListener('touchmove', (event) => {
+                if (isTouching && event.touches.length === 1) {
+                    const currentTouchX = event.touches[0].clientX;
+                    const currentTouchY = event.touches[0].clientY;
+
+                    const deltaX = currentTouchX - lastTouchX;
+                    const deltaY = currentTouchY - lastTouchY;
+
+                    earthGroup.rotation.y += deltaX * 0.005;
+                    earthGroup.rotation.x += deltaY * 0.005;
+
+                    lastTouchX = currentTouchX;
+                    lastTouchY = currentTouchY;
+                }
+            });
+
+            renderer.domElement.addEventListener('touchend', () => {
+                isTouching = false;
+            });
+        }
+
+        /**
+         * Sets up the timeline slider functionality.
+         */
+        function setupTimelineSlider() {
+            const slider = document.getElementById('timelineSlider');
+            const yearDisplay = document.getElementById('yearDisplay');
+
+            const currentYear = new Date().getFullYear();
+            slider.max = currentYear;
+            slider.value = currentYear; 
+            yearDisplay.textContent = currentYear;
+
+            slider.oninput = () => {
+                const selectedYear = parseInt(slider.value);
+                yearDisplay.textContent = selectedYear;
+                updateDisplayFromControls(); // Trigger full display update
+            };
+        }
+
+        /**
+         * Sets up the percentage slider functionality.
+         */
+        function setupPercentageSlider() {
+            const slider = document.getElementById('percentageSlider');
+            const percentageDisplay = document.getElementById('percentageDisplay');
+
+            slider.value = currentDisplayPercentage * 100;
+            percentageDisplay.textContent = `${slider.value}%`;
+
+            slider.oninput = () => {
+                const selectedPercentage = parseInt(slider.value);
+                currentDisplayPercentage = selectedPercentage / 100; 
+                percentageDisplay.textContent = `${selectedPercentage}%`;
+                updateDisplayFromControls(); // Trigger full display update
+            };
+        }
+        
+        /**
+         * Sets the visual size of all satellites in the 3D scene.
+         * @param {number} size - The new scaling factor for satellite meshes.
+         * @param {HTMLElement} clickedButton - The button element that was clicked (for 'active' class).
+         */
+        function setSatelliteSize(size, clickedButton) {
+            satelliteSize = size;
+            allSatellites3D.forEach(sat => { 
+                sat.group.scale.setScalar(size); 
+            });
+            
+            document.querySelectorAll('#controls .control-group button').forEach(btn => {
+                if (btn.onclick && btn.onclick.toString().includes('setSatelliteSize')) { 
+                    btn.classList.remove('active');
+                }
+            });
+            clickedButton.classList.add('active');
+        }
+        
+        /**
+         * Adjusts the camera to a predefined view that focuses on the satellite constellation.
+         */
+        function focusOnConstellation() {
+            camera.position.set(400, 300, 400); 
+            camera.lookAt(GLOBE_OFFSET_X, 0, 0); 
+        }
+        
+        /**
+         * Resets the camera view and Earth's rotation to their initial states.
+         */
+        function resetView() {
+            camera.position.set(0, 0, 300); 
+            camera.lookAt(GLOBE_OFFSET_X, 0, 0); 
+            if (earthGroup) {
+                earthGroup.rotation.set(0, 0, 0); 
+                earthGroup.position.x = GLOBE_OFFSET_X; 
+            }
+        }
+        
+        /**
+         * Updates the live statistics displayed in the UI panels.
+         */
+        function updateStats() {
+            const starlinks = displayedSatellitesData.filter(s => s.type === 'starlink');
+            const otherLeos = displayedSatellitesData.filter(s => s.type === 'other-leo');
+            const debris = displayedSatellitesData.filter(s => s.type === 'debris');
+            const inactives = displayedSatellitesData.filter(s => s.type === 'inactive');
+
+            const totalActive = starlinks.length + otherLeos.length + debris.length + inactives.length;
+            const totalAltitude = displayedSatellitesData.reduce((sum, sat) => sum + sat.altitude, 0);
+            const avgAlt = displayedSatellitesData.length > 0 ? totalAltitude / displayedSatellitesData.length : 0;
+            
+            // Coverage calculation remains a simplified approximation
+            const coverage = Math.min(100, (totalActive / 10000) * 100); // Assuming higher total target for all LEO
+
+            document.getElementById('totalDisplayedSats').textContent = totalActive;
+            document.getElementById('starlinkDisplayedSats').textContent = starlinks.length;
+            document.getElementById('otherLeoDisplayedSats').textContent = otherLeos.length;
+            document.getElementById('debrisDisplayedSats').textContent = debris.length;
+            document.getElementById('inactiveDisplayedSats').textContent = inactives.length;
+            document.getElementById('avgAlt').textContent = Math.round(avgAlt) + ' km';
+            document.getElementById('coverage').textContent = Math.round(coverage) + '%';
+        }
+        
+        /**
+         * The main animation loop for the 3D scene.
+         */
+        function animate() {
+            if (!isAnimating) return; 
+            requestAnimationFrame(animate); 
+
+            if (earthGroup) {
+                earthGroup.rotation.y += 0.0005; 
+            }
+            
+            const now = new Date();
+            // Update positions only for real satellites with TLEs
+            allSatellites3D.forEach((sat3D) => { 
+                if (sat3D.data.satrec) { // Only propagate real satellites
+                    const satData = sat3D.data;
+                    const pos = getSatPosition(satData.satrec, now);
+                    
+                    if (pos) { 
+                        const position = latLonToPosition(pos.latitude, pos.longitude, pos.altitude);
+                        sat3D.group.position.copy(position);
+
+                        // Update data for details panel
+                        satData.latitude = pos.latitude;
+                        satData.longitude = pos.longitude;
+                        satData.altitude = pos.altitude;
+                        
+                        if (selectedSatellite && selectedSatellite.data.id === satData.id) {
+                            showSatelliteDetails(satData);
+                        }
+                    }
+                }
+            });
+            
+            updateTrails(); 
+            renderer.render(scene, camera); 
+        }
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        window.onload = init;
+    </script>
+</body>
+</html>
