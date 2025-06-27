@@ -323,8 +323,14 @@
                 right: 10px;
                 bottom: 10px;
                 width: 90vw;
-                font-size: 13px;
-                padding: 10px;
+                font-size: 16px; /* Increased font size for mobile */
+                padding: 16px;
+            }
+            #satelliteDetails h4 {
+                font-size: 1.3em;
+            }
+            #stats h4 {
+                margin-top: 36px; /* Add space for close button */
             }
         }
         @media (max-width: 480px) {
@@ -334,9 +340,14 @@
                 bottom: 0;
                 width: 100vw;
                 border-radius: 12px 12px 0 0;
-                padding: 8px 4px;
-                font-size: 12px;
-                box-shadow: 0 -2px 10px rgba(0,255,136,0.2);
+                padding: 12px 6px;
+                font-size: 15px; /* Increased font size for mobile */
+            }
+            #satelliteDetails h4 {
+                font-size: 1.2em;
+            }
+            #stats h4 {
+                margin-top: 36px; /* Add space for close button */
             }
         }
         #satelliteDetails h4 {
@@ -633,8 +644,7 @@
             <button class="panel-close-btn" id="closeDetailsBtn">✕</button>
             <h4>📡 Satellite Details</h4>
             <div id="satelliteDetailsContent">
-                <p>Click on a satellite to view details<br>
-                Click on "Focus Constellation" to get the bird's eye view.</p>
+                <p>Click on "Focus Constellation" to get the bird's eye view.</p>
             </div>
         </div>
 
@@ -1331,6 +1341,7 @@
          * @param {number} index - The index of the selected satellite within `displayedSatellitesData`.
          */
         function selectSatellite(index) {
+            console.log('selectSatellite called with index:', index); // DEBUG
             document.querySelectorAll('.satellite-item').forEach(item => {
                 item.classList.remove('selected');
             });
@@ -1346,6 +1357,13 @@
             showSatelliteDetails(satData); 
             
             highlightSatellite(selectedSatellite); 
+
+            // Show details panel in mobile mode
+            if (window.innerWidth <= 700) {
+                closeAllPanels();
+                forceShowPanel('satelliteDetails');
+                console.log('forceShowPanel(satelliteDetails) called'); // DEBUG
+            }
         }
         
         /**
